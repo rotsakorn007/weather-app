@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบวัดอุณหภูมิและสภาพอากาศ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            min-height: 100vh;
+            color: #f8fafc;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-input {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .glass-input:focus {
+            border-color: #38bdf8;
+            outline: none;
+        }
+        .pulse-animation {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen justify-between p-4 md:p-8">
+
+    <!-- Header -->
+    <header class="max-w-5xl mx-auto w-full mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+            <div class="p-3 bg-sky-500/20 text-sky-400 rounded-2xl border border-sky-500/30">
+                <i class="fa-solid font-bold fa-temperature-half text-2xl"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-sky-400 to-indigo-300">
+                    ระบบวัดอุณหภูมิ & สภาพอากาศ
+                </h1>
+                <p class="text-xs text-slate-400">Weather & Temperature Real-time Monitoring</p>
+            </div>
+        </div>
+
+        <!-- Temperature Unit Toggle -->
+        <div class="flex items-center glass-card p-1.5 rounded-xl border border-slate-700">
+            <button id="unit-c" onclick="setUnit('C')" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 bg-sky-500 text-white shadow-lg">°C</button>
+            <button id="unit-f" onclick="setUnit('F')" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 text-slate-400 hover:text-white">°F</button>
+            <button id="unit-k" onclick="setUnit('K')" class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 text-slate-400 hover:text-white">K</button>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-5xl mx-auto w-full flex-grow flex flex-col gap-6">
+
+        <!-- Search Bar & GPS Trigger -->
+        <div class="glass-card p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row gap-3 items-center">
+            <div class="relative w-full">
+                <i class="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input type="text" id="city-input" placeholder="พิมพ์ชื่อเมืองหรือจังหวัด... (เช่น Bangkok, Tokyo, London)" 
+                    class="w-full pl-11 pr-4 py-3 rounded-xl glass-input text-white placeholder-slate-400 focus:ring-2 focus:ring-sky-500 text-sm transition-all">
+            </div>
+            <div class="flex gap-2 w-full sm:w-auto">
+                <button onclick="searchCity()" class="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white rounded-xl font-medium text-sm transition-all shadow-lg flex items-center justify-center gap-2 whitespace-nowrap">
+                    <i class="fa-solid fa-search"></i> ค้นหา
+                </button>
+                <button onclick="getLocation()" title="ใช้วัดอุณหภูมิตามตำแหน่งปัจจุบันของคุณ" class="px-4 py-3 bg-slate-700/60 hover:bg-slate-600 text-sky-400 border border-slate-600 rounded-xl transition-all flex items-center justify-center">
+                    <i class="fa-solid fa-location-crosshairs text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Weather Display Card -->
+        <div id="weather-card" class="glass-card rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden transition-all">
+            <!-- Background Decorative Blur Circle -->
+            <div id="bg-glow" class="absolute -top-24 -right-24 w-72 h-72 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+            <div class="flex flex-col md:flex-row justify-between items-center md:items-start gap-6 relative z-10">
+                <!-- Location Info -->
+                <div class="text-center md:text-left">
+                    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800/80 text-sky-400 text-xs font-semibold mb-3 border border-slate-700/50">
+                        <i class="fa-solid fa-location-dot"></i>
+                        <span id="location-name">กำลังโหลดข้อมูล...</span>
+                    </div>
+                    <h2 id="temperature-text" class="text-6xl md:text-8xl font-extrabold tracking-tight my-2 text-slate-100">
+                        --<span class="text-3xl md:text-5xl font-normal text-sky-400">°C</span>
+                    </h2>
+                    <p id="weather-desc" class="text-lg md:text-xl text-slate-300 font-medium capitalize flex items-center justify-center md:justify-start gap-2">
+                        --
+                    </p>
+                    <p id="time-text" class="text-xs text-slate-400 mt-2">
+                        อัปเดตล่าสุด: --:--
+                    </p>
+                </div>
+
+                <!-- Big Weather Icon & Temperature Gauge -->
+                <div class="flex flex-col items-center justify-center">
+                    <div id="weather-icon-container" class="text-7xl md:text-9xl text-sky-400 drop-shadow-[0_10px_10px_rgba(56,189,248,0.2)] my-2">
+                        <i class="fa-solid fa-cloud-sun pulse-animation"></i>
+                    </div>
+                    <!-- Temperature Feeling -->
+                    <div class="text-xs md:text-sm text-slate-300 bg-slate-800/50 px-4 py-2 rounded-xl border border-slate-700/40 text-center mt-2">
+                        ความรู้สึกเหมือนจริง (Feels Like): <span id="feels-like" class="font-bold text-sky-300">--°C</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metrics Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8 pt-6 border-t border-slate-700/50 relative z-10">
+                <!-- Humidity -->
+                <div class="glass-card p-4 rounded-2xl border border-slate-700/40 flex items-center gap-3">
+                    <div class="p-3 bg-blue-500/10 text-blue-400 rounded-xl text-xl">
+                        <i class="fa-solid fa-droplet"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400">ความชื้น</p>
+                        <p id="humidity-val" class="text-lg font-bold text-slate-100">-- %</p>
+                    </div>
+                </div>
+
+                <!-- Wind Speed -->
+                <div class="glass-card p-4 rounded-2xl border border-slate-700/40 flex items-center gap-3">
+                    <div class="p-3 bg-teal-500/10 text-teal-400 rounded-xl text-xl">
+                        <i class="fa-solid fa-wind"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400">ความเร็วลม</p>
+                        <p id="wind-val" class="text-lg font-bold text-slate-100">-- km/h</p>
+                    </div>
+                </div>
+
+                <!-- Pressure -->
+                <div class="glass-card p-4 rounded-2xl border border-slate-700/40 flex items-center gap-3">
+                    <div class="p-3 bg-amber-500/10 text-amber-400 rounded-xl text-xl">
+                        <i class="fa-solid fa-gauge-high"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400">ความกดอากาศ</p>
+                        <p id="pressure-val" class="text-lg font-bold text-slate-100">-- hPa</p>
+                    </div>
+                </div>
+
+                <!-- UV Index or Min/Max -->
+                <div class="glass-card p-4 rounded-2xl border border-slate-700/40 flex items-center gap-3">
+                    <div class="p-3 bg-purple-500/10 text-purple-400 rounded-xl text-xl">
+                        <i class="fa-solid fa-temperature-arrow-up"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400">อุณหภูมิ สูง/ต่ำ</p>
+                        <p id="temp-range-val" class="text-lg font-bold text-slate-100">-- / --</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Popular Cities Quick Select -->
+        <div>
+            <h3 class="text-sm font-medium text-slate-400 mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-city text-sky-400"></i> เมืองยอดนิยม
+            </h3>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button onclick="fetchWeatherByCity('Bangkok')" class="glass-card p-3 rounded-xl border border-slate-700/60 hover:border-sky-500/50 hover:bg-slate-800/80 transition-all text-left flex justify-between items-center group">
+                    <span class="text-sm font-medium text-slate-200 group-hover:text-sky-400">กรุงเทพฯ</span>
+                    <i class="fa-solid fa-angle-right text-xs text-slate-500 group-hover:text-sky-400 transition-all"></i>
+                </button>
+                <button onclick="fetchWeatherByCity('Chiang Mai')" class="glass-card p-3 rounded-xl border border-slate-700/60 hover:border-sky-500/50 hover:bg-slate-800/80 transition-all text-left flex justify-between items-center group">
+                    <span class="text-sm font-medium text-slate-200 group-hover:text-sky-400">เชียงใหม่</span>
+                    <i class="fa-solid fa-angle-right text-xs text-slate-500 group-hover:text-sky-400 transition-all"></i>
+                </button>
+                <button onclick="fetchWeatherByCity('Phuket')" class="glass-card p-3 rounded-xl border border-slate-700/60 hover:border-sky-500/50 hover:bg-slate-800/80 transition-all text-left flex justify-between items-center group">
+                    <span class="text-sm font-medium text-slate-200 group-hover:text-sky-400">ภูเก็ต</span>
+                    <i class="fa-solid fa-angle-right text-xs text-slate-500 group-hover:text-sky-400 transition-all"></i>
+                </button>
+                <button onclick="fetchWeatherByCity('Tokyo')" class="glass-card p-3 rounded-xl border border-slate-700/60 hover:border-sky-500/50 hover:bg-slate-800/80 transition-all text-left flex justify-between items-center group">
+                    <span class="text-sm font-medium text-slate-200 group-hover:text-sky-400">โตเกียว</span>
+                    <i class="fa-solid fa-angle-right text-xs text-slate-500 group-hover:text-sky-400 transition-all"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Custom Notification Dialog Modal -->
+        <div id="toast" class="fixed bottom-6 right-6 hidden glass-card border border-sky-500/50 text-white px-5 py-3 rounded-2xl shadow-2xl items-center gap-3 z-50 transition-all">
+            <i id="toast-icon" class="fa-solid fa-circle-info text-sky-400 text-lg"></i>
+            <span id="toast-message" class="text-sm font-medium">ข้อความแจ้งเตือน</span>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="max-w-5xl mx-auto w-full mt-8 text-center text-xs text-slate-500 py-4 border-t border-slate-800">
+        <p>© 2026 ระบบวัดอุณหภูมิและสภาพอากาศสดผ่าน Open-Meteo API</p>
+    </footer>
+
+    <script>
+        // State variables
+        let currentTempC = 0;
+        let currentFeelsLikeC = 0;
+        let currentMinTempC = 0;
+        let currentMaxTempC = 0;
+        let currentUnit = 'C';
+        let currentWeatherData = null;
+
+        // Weather Code mapping for Open-Meteo
+        const weatherCodes = {
+            0: { desc: "ท้องฟ้าแจ่มใส", icon: "fa-sun", color: "text-amber-400" },
+            1: { desc: "ท้องฟ้าโปร่งเป็นส่วนใหญ่", icon: "fa-cloud-sun", color: "text-sky-300" },
+            2: { desc: "มีเมฆบางส่วน", icon: "fa-cloud-sun", color: "text-slate-300" },
+            3: { desc: "มีเมฆมาก", icon: "fa-cloud", color: "text-slate-400" },
+            45: { desc: "มีหมอก", icon: "fa-smog", color: "text-slate-400" },
+            48: { desc: "มีหมอกน้ำค้างแข็ง", icon: "fa-smog", color: "text-cyan-300" },
+            51: { desc: "ฝนตกปรอยๆ เบาๆ", icon: "fa-cloud-rain", color: "text-blue-300" },
+            53: { desc: "ฝนตกปรอยๆ ปานกลาง", icon: "fa-cloud-rain", color: "text-blue-400" },
+            55: { desc: "ฝนตกปรอยๆ หนาแน่น", icon: "fa-cloud-showers-heavy", color: "text-blue-500" },
+            61: { desc: "ฝนตกเล็กน้อย", icon: "fa-cloud-sun-rain", color: "text-sky-400" },
+            63: { desc: "ฝนตกปานกลาง", icon: "fa-cloud-rain", color: "text-blue-400" },
+            65: { desc: "ฝนตกหนัก", icon: "fa-cloud-showers-heavy", color: "text-blue-600" },
+            71: { desc: "หิมะตกเบาๆ", icon: "fa-snowflake", color: "text-cyan-200" },
+            73: { desc: "หิมะตกปานกลาง", icon: "fa-snowflake", color: "text-cyan-300" },
+            75: { desc: "หิมะตกหนัก", icon: "fa-snowflake", color: "text-cyan-400" },
+            80: { desc: "ฝนซ่าเบาๆ", icon: "fa-cloud-showers-heavy", color: "text-sky-300" },
+            81: { desc: "ฝนซ่าปานกลาง", icon: "fa-cloud-showers-heavy", color: "text-blue-400" },
+            82: { desc: "ฝนซ่าอย่างรุนแรง", icon: "fa-cloud-showers-water", color: "text-blue-600" },
+            95: { desc: "พายุฝนฟ้าคะนอง", icon: "fa-bolt-lightning", color: "text-amber-500" },
+            96: { desc: "พายุฝนฟ้าคะนองพร้อมลูกเห็บเบา", icon: "fa-cloud-bolt", color: "text-purple-400" },
+            99: { desc: "พายุฝนฟ้าคะนองพร้อมลูกเห็บหนัก", icon: "fa-cloud-bolt", color: "text-purple-600" }
+        };
+
+        window.onload = function() {
+            // Default to Bangkok on load
+            fetchWeatherByCity('Bangkok');
+
+            // Setup search enter key event
+            document.getElementById('city-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchCity();
+                }
+            });
+        };
+
+        // Show Toast Notification
+        function showNotification(message, isError = false) {
+            const toast = document.getElementById('toast');
+            const toastMessage = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMessage.textContent = message;
+            if (isError) {
+                toastIcon.className = "fa-solid fa-circle-exclamation text-rose-400 text-lg";
+                toast.classList.remove('border-sky-500/50');
+                toast.classList.add('border-rose-500/50');
+            } else {
+                toastIcon.className = "fa-solid fa-circle-check text-emerald-400 text-lg";
+                toast.classList.remove('border-rose-500/50');
+                toast.classList.add('border-sky-500/50');
+            }
+
+            toast.classList.remove('hidden');
+            toast.classList.add('flex');
+
+            setTimeout(() => {
+                toast.classList.add('hidden');
+                toast.classList.remove('flex');
+            }, 3500);
+        }
+
+        // Search weather by input city name
+        async function searchCity() {
+            const input = document.getElementById('city-input').value.trim();
+            if (!input) {
+                showNotification('กรุณากรอกชื่อเมืองหรือจังหวัด', true);
+                return;
+            }
+            fetchWeatherByCity(input);
+        }
+
+        // Fetch Coordinates for a given city name using Open-Meteo Geocoding API
+        async function fetchWeatherByCity(cityName) {
+            try {
+                showNotification(`กำลังค้นหาข้อมูลสภาพอากาศสำหรับ ${cityName}...`);
+                const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=th&format=json`;
+                const response = await fetch(geoUrl);
+                const data = await response.json();
+
+                if (!data.results || data.results.length === 0) {
+                    showNotification(`ไม่พบข้อมูลสำหรับเมือง "${cityName}"`, true);
+                    return;
+                }
+
+                const location = data.results[0];
+                const displayName = `${location.name}${location.admin1 ? ', ' + location.admin1 : ''} (${location.country || ''})`;
+                
+                await getWeatherData(location.latitude, location.longitude, displayName);
+            } catch (error) {
+                console.error("Error fetching city geocode:", error);
+                showNotification("เกิดข้อผิดพลาดในการเชื่อมต่อเครือข่าย", true);
+            }
+        }
+
+        // Fetch weather based on Browser GPS Location
+        function getLocation() {
+            if (navigator.geolocation) {
+                showNotification("กำลังระบุตำแหน่งของคุณจาก GPS...");
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        await getWeatherData(lat, lon, "ตำแหน่งปัจจุบันของคุณ");
+                    },
+                    (error) => {
+                        showNotification("ไม่สามารถเข้าถึงตำแหน่งของคุณได้ กรุณาอนุญาตการเข้าถึง GPS", true);
+                    }
+                );
+            } else {
+                showNotification("เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่ง GPS", true);
+            }
+        }
+
+        // Get actual Weather details from Open-Meteo API
+        async function getWeatherData(lat, lon, locationLabel) {
+            try {
+                const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,surface_pressure,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto`;
+                
+                const response = await fetch(weatherUrl);
+                const data = await response.json();
+
+                if (!data.current) {
+                    showNotification("ไม่สามารถดึงข้อมูลอุณหภูมิได้ในขณะนี้", true);
+                    return;
+                }
+
+                // Update Globals
+                currentTempC = data.current.temperature_2m;
+                currentFeelsLikeC = data.current.apparent_temperature;
+                currentMinTempC = data.daily.temperature_2m_min[0];
+                currentMaxTempC = data.daily.temperature_2m_max[0];
+                currentWeatherData = data;
+
+                // Update UI Elements
+                document.getElementById('location-name').textContent = locationLabel;
+                document.getElementById('humidity-val').textContent = `${data.current.relative_humidity_2m} %`;
+                document.getElementById('wind-val').textContent = `${data.current.wind_speed_10m} km/h`;
+                document.getElementById('pressure-val').textContent = `${Math.round(data.current.surface_pressure)} hPa`;
+
+                // Weather Code Mapping
+                const code = data.current.weather_code;
+                const weatherInfo = weatherCodes[code] || { desc: "สภาพอากาศทั่วไป", icon: "fa-cloud", color: "text-slate-300" };
+                
+                document.getElementById('weather-desc').innerHTML = `<i class="fa-solid ${weatherInfo.icon} ${weatherInfo.color}"></i> ${weatherInfo.desc}`;
+                document.getElementById('weather-icon-container').innerHTML = `<i class="fa-solid ${weatherInfo.icon} ${weatherInfo.color} transition-all"></i>`;
+
+                // Update current time display
+                const now = new Date();
+                const timeString = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+                document.getElementById('time-text').textContent = `อัปเดตล่าสุด: ${timeString} น.`;
+
+                // Dynamic background glow color based on temperature
+                const glow = document.getElementById('bg-glow');
+                if (currentTempC >= 35) {
+                    glow.className = "absolute -top-24 -right-24 w-72 h-72 bg-rose-500/20 rounded-full blur-3xl pointer-events-none";
+                } else if (currentTempC >= 28) {
+                    glow.className = "absolute -top-24 -right-24 w-72 h-72 bg-amber-500/20 rounded-full blur-3xl pointer-events-none";
+                } else {
+                    glow.className = "absolute -top-24 -right-24 w-72 h-72 bg-sky-500/20 rounded-full blur-3xl pointer-events-none";
+                }
+
+                // Render temperature values according to current unit
+                renderTemperatureDisplay();
+
+            } catch (error) {
+                console.error("Error fetching weather data:", error);
+                showNotification("เกิดข้อผิดพลาดในการอ่านข้อมูลอุณหภูมิ", true);
+            }
+        }
+
+        // Change temperature units (Celsius, Fahrenheit, Kelvin)
+        function setUnit(unit) {
+            currentUnit = unit;
+
+            // Reset active button styling
+            ['C', 'F', 'K'].forEach(u => {
+                const btn = document.getElementById(`unit-${u.toLowerCase()}`);
+                if (u === unit) {
+                    btn.className = "px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 bg-sky-500 text-white shadow-lg";
+                } else {
+                    btn.className = "px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 text-slate-400 hover:text-white";
+                }
+            });
+
+            renderTemperatureDisplay();
+        }
+
+        // Helper method to convert Temp C to target unit
+        function convertTemp(tempInC, unit) {
+            if (unit === 'F') {
+                return (tempInC * 9/5) + 32;
+            } else if (unit === 'K') {
+                return tempInC + 273.15;
+            }
+            return tempInC; // Default C
+        }
+
+        // Render current temperature state to UI
+        function renderTemperatureDisplay() {
+            const unitSymbol = currentUnit === 'C' ? '°C' : (currentUnit === 'F' ? '°F' : 'K');
+            
+            const convertedTemp = convertTemp(currentTempC, currentUnit);
+            const convertedFeelsLike = convertTemp(currentFeelsLikeC, currentUnit);
+            const convertedMin = convertTemp(currentMinTempC, currentUnit);
+            const convertedMax = convertTemp(currentMaxTempC, currentUnit);
+
+            document.getElementById('temperature-text').innerHTML = `${convertedTemp.toFixed(1)}<span class="text-3xl md:text-5xl font-normal text-sky-400 ml-1">${unitSymbol}</span>`;
+            document.getElementById('feels-like').textContent = `${convertedFeelsLike.toFixed(1)} ${unitSymbol}`;
+            document.getElementById('temp-range-val').textContent = `${convertedMax.toFixed(0)}${unitSymbol} / ${convertedMin.toFixed(0)}${unitSymbol}`;
+        }
+    </script>
+</body>
+</html>
